@@ -1,0 +1,209 @@
+/* ============================================================= */
+/* AUTH PAGES — login & password reset                            */
+/* Follows design.md: black/white/blue only, radius 0,            */
+/* no animations/transitions, contained (no oversized images).    */
+/* ============================================================= */
+
+.auth {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 56px;
+  padding-inline: 24px;
+  background: var(--surface);
+  box-sizing: border-box;
+}
+
+.auth__card {
+  width: 100%;
+  max-width: 440px;
+  padding: 40px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  box-sizing: border-box;
+}
+
+/* ---------- Brand ---------- */
+.auth__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+  text-decoration: none;
+}
+
+.auth__brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.auth__brand-text strong {
+  font-family: var(--heading);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-h);
+}
+
+.auth__brand-text small {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ---------- Headings ---------- */
+.auth__title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  line-height: 1.3;
+}
+
+.auth__subtitle {
+  margin: 0 0 28px;
+  color: var(--text);
+}
+
+/* ---------- Form ---------- */
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.auth__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auth__label {
+  color: var(--text-h);
+  font-weight: 700;
+}
+
+.auth__input {
+  width: 100%;
+  min-height: 46px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-family: var(--sans);
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+.auth__input:hover {
+  border-color: var(--accent-border);
+}
+
+.auth__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.auth__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.auth__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-h);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.auth__checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.auth__link {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.auth__link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.auth__link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.auth__submit {
+  width: 100%;
+}
+
+/* ---------- Inline feedback ---------- */
+.auth__message {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.auth__submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.auth__notice {
+  padding: 14px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+}
+
+.auth__notice strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* ---------- Footer links ---------- */
+.auth__footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 560px) {
+  .auth {
+    padding-block: 24px;
+    padding-inline: 16px;
+  }
+
+  .auth__card {
+    padding: 28px 20px;
+  }
+
+  .auth__title {
+    font-size: 24px;
+  }
+
+  .auth__subtitle {
+    margin-bottom: 22px;
+  }
+}

@@ -1,0 +1,14 @@
+# Django
+Django==6.1.2
+
+# REST API
+djangorestframework==3.18.3
+
+# JWT authentication
+djangorestframework-simplejwt==5.5.1
+
+# CORS for the frontend dev server
+django-cors-headers==4.9.0
+
+# Environment variables
+python-dotenv==1.2.4

@@ -1,0 +1,56 @@
+/* ============================================================= */
+/* SIDEBAR — admin navigation.                                    */
+/* Follows design.md: black/white/blue, radius 0, no transitions. */
+/* ============================================================= */
+
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--bg);
+  border-inline-end: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.sidebar__nav {
+  padding: 12px 0;
+}
+
+.sidebar__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar__item {
+  margin: 0;
+}
+
+.sidebar__link {
+  display: block;
+  padding: 12px 20px;
+  color: var(--text-h);
+  font-weight: 600;
+  text-decoration: none;
+  border-inline-start: 3px solid transparent;
+}
+
+.sidebar__link:hover {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.sidebar__link--active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-inline-start-color: var(--accent);
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 100%;
+    border-inline-end: none;
+    border-bottom: 1px solid var(--border);
+  }
+}

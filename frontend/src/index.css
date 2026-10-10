@@ -1,0 +1,149 @@
+﻿@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap');
+
+:root {
+  /* ============================================================= */
+  /* PALETTE — restricted to BLACK / WHITE / BLUE                   */
+  /* ============================================================= */
+  --black: #0b0f19;
+  --white: #ffffff;
+
+  --blue-900: #1e3a8a;
+  --blue-800: #1e40af;
+  --blue-700: #1d4ed8;
+  --blue-600: #2563eb;
+  --blue-500: #3b82f6;
+  --blue-400: #60a5fa;
+  --blue-200: #bfdbfe;
+  --blue-100: #dbeafe;
+  --blue-50:  #eff6ff;
+
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e1;
+  --gray-400: #94a3b8;
+  --gray-500: #64748b;
+  --gray-600: #475569;
+
+  /* ============================================================= */
+  /* SEMANTIC TOKENS — LIGHT THEME (white bg, black text, blue accent) */
+  /* ============================================================= */
+  --text: var(--gray-500);
+  --text-h: var(--black);
+  --bg: var(--white);
+  --surface: var(--gray-100);
+  --border: var(--gray-200);
+  --code-bg: var(--gray-100);
+  --accent: var(--blue-600);
+  --accent-hover: var(--blue-700);
+  --accent-strong: var(--blue-800);
+  --accent-bg: var(--blue-50);
+  --accent-border: var(--blue-200);
+  --social-bg: var(--gray-100);
+  --shadow: 0 1px 2px rgba(11, 15, 25, 0.06), 0 2px 6px rgba(11, 15, 25, 0.04);
+
+  /* ============================================================= */
+  /* TYPOGRAPHY — Arabic-first font stack                           */
+  /* ============================================================= */
+  --sans: 'Tajawal', 'Cairo', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --heading: 'Cairo', 'Tajawal', 'Segoe UI', system-ui, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', Consolas, monospace;
+
+  font: 18px/160% var(--sans);
+  letter-spacing: 0.1px;
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 16px;
+  }
+}
+
+/* DARK THEME — black bg, white text, blue accent */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: var(--gray-400);
+    --text-h: var(--white);
+    --bg: var(--black);
+    --surface: #161d2e;
+    --border: var(--gray-600);
+    --code-bg: #141b2b;
+    --accent: var(--blue-500);
+    --accent-hover: var(--blue-400);
+    --accent-strong: var(--blue-400);
+    --accent-bg: rgba(59, 130, 246, 0.14);
+    --accent-border: rgba(59, 130, 246, 0.45);
+    --social-bg: rgba(22, 29, 46, 0.6);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  #social .button-icon {
+    filter: invert(1) brightness(2);
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+}
+
+#root {
+  width: 100%;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--heading);
+  font-weight: 700;
+  color: var(--text-h);
+}
+
+h1 {
+  font-size: 56px;
+  letter-spacing: -0.5px;
+  margin: 32px 0;
+  @media (max-width: 1024px) {
+    font-size: 36px;
+    margin: 20px 0;
+  }
+}
+h2 {
+  font-size: 24px;
+  line-height: 130%;
+  margin: 0 0 8px;
+  @media (max-width: 1024px) {
+    font-size: 20px;
+  }
+}
+p {
+  margin: 0;
+}
+
+code,
+.counter {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: 3px;
+  color: var(--text-h);
+}
+
+code {
+  font-size: 15px;
+  line-height: 140%;
+  padding: 4px 8px;
+  background: var(--code-bg);
+}
