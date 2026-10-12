@@ -84,6 +84,69 @@
   font-weight: 700;
 }
 
+.student-paper__section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.student-paper__section-title {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.student-paper__table-wrap {
+  overflow-x: auto;
+}
+
+.student-paper__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.student-paper__table th,
+.student-paper__table td {
+  padding: 10px 12px;
+  text-align: start;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.student-paper__table th {
+  color: var(--text-h);
+  font-family: var(--heading);
+  font-weight: 700;
+  font-size: 13px;
+  border-bottom: 2px solid var(--accent-border);
+}
+
+.student-paper__table td {
+  color: var(--text-h);
+}
+
+.student-paper__table tfoot td {
+  border-bottom: none;
+  border-top: 2px solid var(--accent);
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.student-paper__link {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.student-paper__link:hover {
+  text-decoration: underline;
+}
+
+.student-paper__link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .student-paper__actions {
   display: flex;
   justify-content: flex-start;

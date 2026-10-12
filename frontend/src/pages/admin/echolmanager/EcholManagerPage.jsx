@@ -5,6 +5,7 @@ import Sidebar from '../../../components/sidebar/Sidebar'
 import { brand } from '../../landingpage/landingData'
 import { extractErrorMessage } from '../../../api/errors'
 import { createGroup, fetchGroups } from '../../../adminFetch/groups'
+import { fetchStudents } from '../../../adminFetch/students'
 import { fetchTeachers } from '../../../adminFetch/teachers'
 import '../admin.css'
 
@@ -33,6 +34,13 @@ const classesByLevel = {
   ],
 }
 
+/** Levels selectable in the filter toolbar, mirroring the create-group form. */
+const levels = [
+  { value: 'primary', label: 'ابتدائية' },
+  { value: 'middle', label: 'متوسطة' },
+  { value: 'secondary', label: 'ثانوية' },
+]
+
 /**
  * echol manager — admin home.
  *
@@ -43,11 +51,17 @@ export default function EcholManagerPage() {
   const [isOpen, setIsOpen] = useState(false)
   const [teachers, setTeachers] = useState([])
   const [groups, setGroups] = useState([])
+  const [students, setStudents] = useState([])
   const [groupsLoading, setGroupsLoading] = useState(false)
   const [groupsError, setGroupsError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [subjectFilter, setSubjectFilter] = useState('')
+  const [levelFilter, setLevelFilter] = useState('')
+  const [classFilter, setClassFilter] = useState('')
 
   const [groupNumber, setGroupNumber] = useState('')
   const [subject, setSubject] = useState('')
@@ -56,26 +70,30 @@ export default function EcholManagerPage() {
   const [teacherId, setTeacherId] = useState('')
   const [revenue, setRevenue] = useState('')
 
-  // Load the group list once on mount.
+  // Load groups and students once on mount.
   useEffect(() => {
     let cancelled = false
 
-    async function loadGroups() {
+    async function loadData() {
       setGroupsLoading(true)
       try {
-        const result = await fetchGroups()
+        const [groupsResult, studentsResult] = await Promise.all([
+          fetchGroups(),
+          fetchStudents(),
+        ])
         if (cancelled) return
-        if (result.ok) {
-          setGroups(result.data)
+        if (groupsResult.ok) {
+          setGroups(groupsResult.data)
         } else {
-          setGroupsError(extractErrorMessage(result.data))
+          setGroupsError(extractErrorMessage(groupsResult.data))
         }
+        if (studentsResult.ok) setStudents(studentsResult.data)
       } finally {
         if (!cancelled) setGroupsLoading(false)
       }
     }
 
-    loadGroups()
+    loadData()
     return () => {
       cancelled = true
     }
@@ -146,6 +164,43 @@ export default function EcholManagerPage() {
     }
   }
 
+  const subjects = Array.from(
+    new Set(groups.map((group) => group.subject).filter(Boolean)),
+  ).sort()
+
+  const classOptions = levelFilter
+    ? classesByLevel[levelFilter] || []
+    : classesByLevel.primary
+
+  const filteredGroups = groups.filter((group) => {
+    if (subjectFilter && group.subject !== subjectFilter) return false
+    if (levelFilter && group.level !== levelFilter) return false
+    if (classFilter && group.class_name !== classFilter) return false
+    return true
+  })
+
+  // Search students by full name, phone numbers, and parents' names.
+  const normalizedQuery = searchQuery.trim().toLowerCase().replace(/[\s-]+/g, '')
+  const searchResults = normalizedQuery
+    ? students.filter((student) =>
+        [
+          student.full_name,
+          student.first_name,
+          student.last_name,
+          student.father_name,
+          student.mother_first_name,
+          student.mother_last_name,
+          student.responsible_phone1,
+          student.responsible_phone2,
+        ].some((field) =>
+          String(field ?? '')
+            .toLowerCase()
+            .replace(/[\s-]+/g, '')
+            .includes(normalizedQuery),
+        ),
+      )
+    : []
+
   return (
     <div className="admin-shell">
       <Sidebar />
@@ -175,10 +230,120 @@ export default function EcholManagerPage() {
           </button>
         </div>
 
+        <div className="admin-filters">
+          <div className="admin-filters__field admin-filters__search">
+            <label className="admin-form__label" htmlFor="filter-search">
+              بحث عن طالب
+            </label>
+            <input
+              className="admin-form__input"
+              id="filter-search"
+              type="search"
+              placeholder="الاسم الكامل، رقم الهاتف، أو اسم الوالدين…"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </div>
+
+          <div className="admin-filters__field">
+            <label className="admin-form__label" htmlFor="filter-subject">
+              المادة
+            </label>
+            <select
+              className="admin-form__input"
+              id="filter-subject"
+              value={subjectFilter}
+              onChange={(event) => setSubjectFilter(event.target.value)}
+            >
+              <option value="">كل المواد</option>
+              {subjects.map((subject) => (
+                <option key={subject} value={subject}>
+                  {subject}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="admin-filters__field">
+            <label className="admin-form__label" htmlFor="filter-level">
+              المستوى
+            </label>
+            <select
+              className="admin-form__input"
+              id="filter-level"
+              value={levelFilter}
+              onChange={(event) => {
+                setLevelFilter(event.target.value)
+                setClassFilter('')
+              }}
+            >
+              <option value="">كل المستويات</option>
+              {levels.map((level) => (
+                <option key={level.value} value={level.value}>
+                  {level.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="admin-filters__field">
+            <label className="admin-form__label" htmlFor="filter-class">
+              القسم
+            </label>
+            <select
+              className="admin-form__input"
+              id="filter-class"
+              value={classFilter}
+              onChange={(event) => setClassFilter(event.target.value)}
+            >
+              <option value="">كل الأقسام</option>
+              {classOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {success && (
           <p className="admin-notice" role="status">
             {success}
           </p>
+        )}
+
+        {normalizedQuery && (
+          <section>
+            <h2 className="admin-section__title">نتائج البحث عن الطلاب</h2>
+
+            {searchResults.length === 0 ? (
+              <p>لا يوجد طلاب مطابقون للبحث.</p>
+            ) : (
+              <div className="group-students">
+                {searchResults.map((student) => (
+                  <div className="group-student" key={student.id}>
+                    <Link
+                      className="group-student__link"
+                      to={`/admin/students/${student.id}`}
+                    >
+                      <h3 className="group-student__name">
+                        {student.full_name}
+                      </h3>
+                      <p className="group-student__meta">
+                        {student.level_display}
+                        {student.class_name_display
+                          ? ` — ${student.class_name_display}`
+                          : ''}
+                      </p>
+                      <p className="group-student__meta">
+                        هاتف المسؤول: {student.responsible_phone1 || '—'}
+                      </p>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         )}
 
         <section>
@@ -187,9 +352,12 @@ export default function EcholManagerPage() {
           {groupsLoading && <p>جارٍ تحميل المجموعات…</p>}
           {groupsError && <p role="alert">{groupsError}</p>}
           {!groupsLoading && groups.length === 0 && <p>لا توجد مجموعات بعد.</p>}
+          {!groupsLoading && groups.length > 0 && filteredGroups.length === 0 && (
+            <p>لا توجد مجموعات مطابقة للتصفية.</p>
+          )}
 
           <div className="group-grid">
-            {groups.map((group) => (
+            {filteredGroups.map((group) => (
               <Link
                 className="group-card"
                 key={group.id}

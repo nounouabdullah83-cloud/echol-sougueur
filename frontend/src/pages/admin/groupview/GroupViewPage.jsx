@@ -13,6 +13,29 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
+/** Normalize a value for searching: lowercase, ignore spaces and dashes. */
+function normalize(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[\s-]+/g, '')
+}
+
+/** Whether a student matches a search query (name, phone, or parents' names). */
+function matchesStudent(student, query) {
+  const needle = normalize(query)
+  if (!needle) return true
+  return [
+    student.full_name,
+    student.first_name,
+    student.last_name,
+    student.father_name,
+    student.mother_first_name,
+    student.mother_last_name,
+    student.responsible_phone1,
+    student.responsible_phone2,
+  ].some((field) => normalize(field).includes(needle))
+}
+
 /**
  * group view — shows a single group's information and its students.
  *
@@ -30,6 +53,9 @@ export default function GroupViewPage() {
   const [actionError, setActionError] = useState('')
 
   const [showStudentForm, setShowStudentForm] = useState(false)
+  const [showAddChoice, setShowAddChoice] = useState(false)
+  const [showExistingPicker, setShowExistingPicker] = useState(false)
+  const [existingQuery, setExistingQuery] = useState('')
   const [submittingStudent, setSubmittingStudent] = useState(false)
   const [studentError, setStudentError] = useState('')
   const [studentSuccess, setStudentSuccess] = useState('')
@@ -83,6 +109,35 @@ export default function GroupViewPage() {
   const availableStudents = allStudents.filter(
     (student) => !currentIds.includes(student.id),
   )
+  const availableMatches = availableStudents.filter((student) =>
+    matchesStudent(student, existingQuery),
+  )
+
+  function openAddChoice() {
+    setStudentError('')
+    setStudentSuccess('')
+    setShowAddChoice(true)
+  }
+
+  function closeAddChoice() {
+    setShowAddChoice(false)
+  }
+
+  function chooseNewStudent() {
+    setShowAddChoice(false)
+    openStudentForm()
+  }
+
+  function chooseExistingStudent() {
+    setShowAddChoice(false)
+    setExistingQuery('')
+    setShowExistingPicker(true)
+  }
+
+  function closeExistingPicker() {
+    setExistingQuery('')
+    setShowExistingPicker(false)
+  }
 
   function resetStudentForm() {
     setFirstName('')
@@ -163,13 +218,18 @@ export default function GroupViewPage() {
       } else {
         setActionError(extractErrorMessage(result.data))
       }
+      return result
     } finally {
       setSaving(false)
     }
   }
 
-  function addStudent(student) {
-    changeStudents([...currentIds, student.id])
+  async function addStudent(student) {
+    setStudentSuccess('')
+    const result = await changeStudents([...currentIds, student.id])
+    if (result?.ok) {
+      setStudentSuccess(`تم إضافة الطالب ${student.full_name} إلى المجموعة.`)
+    }
   }
 
   function removeStudent(student) {
@@ -191,7 +251,7 @@ export default function GroupViewPage() {
           </div>
 
           <div className="admin-main__actions">
-            <button className="lp-btn" type="button" onClick={openStudentForm}>
+            <button className="lp-btn" type="button" onClick={openAddChoice}>
               add student
             </button>
             <Link className="lp-btn lp-btn--outline" to="/admin/echolmanager">
@@ -306,43 +366,134 @@ export default function GroupViewPage() {
                 </div>
               )}
             </section>
+          </>
+        )}
 
-            <section>
-              <h2 className="admin-section__title">
-                إضافة طلاب للمجموعة
+        {showAddChoice && (
+          <div
+            className="admin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-choice-title"
+          >
+            <div className="admin-modal__card admin-modal__card--narrow">
+              <h2 className="admin-modal__title" id="add-choice-title">
+                إضافة طالب
+              </h2>
+              <p className="admin-form__hint">اختر طريقة الإضافة:</p>
+
+              <div className="admin-choice">
+                <button
+                  className="admin-choice__option"
+                  type="button"
+                  onClick={chooseExistingStudent}
+                >
+                  <span className="admin-choice__title">طالب موجود</span>
+                  <span className="admin-choice__hint">
+                    البحث عن طالب مسجّل مسبقًا وإضافته إلى هذه المجموعة.
+                  </span>
+                </button>
+
+                <button
+                  className="admin-choice__option"
+                  type="button"
+                  onClick={chooseNewStudent}
+                >
+                  <span className="admin-choice__title">طالب جديد</span>
+                  <span className="admin-choice__hint">
+                    إنشاء ملف طالب جديد وإضافته إلى هذه المجموعة.
+                  </span>
+                </button>
+              </div>
+
+              <div className="admin-form__actions">
+                <button
+                  className="lp-btn lp-btn--outline"
+                  type="button"
+                  onClick={closeAddChoice}
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showExistingPicker && (
+          <div
+            className="admin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="existing-student-title"
+          >
+            <div className="admin-modal__card">
+              <h2 className="admin-modal__title" id="existing-student-title">
+                إضافة طالب موجود
               </h2>
 
-              {availableStudents.length === 0 ? (
-                <p>لا يوجد طلاب متاحون لإضافتهم (أو كل الطلاب في المجموعة).</p>
-              ) : (
-                <div className="group-students">
-                  {availableStudents.map((student) => (
-                    <div className="group-student" key={student.id}>
-                      <Link
-                        className="group-student__link"
-                        to={`/admin/students/${student.id}`}
-                      >
-                        <h3 className="group-student__name">
-                          {student.full_name}
-                        </h3>
-                        <p className="group-student__meta">
-                          المدرسة: {student.school || '—'}
-                        </p>
-                      </Link>
-                      <button
-                        className="lp-btn"
-                        type="button"
-                        disabled={saving}
-                        onClick={() => addStudent(student)}
-                      >
-                        إضافة
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          </>
+              <div className="admin-form__field">
+                <label className="admin-form__label" htmlFor="existing-search">
+                  بحث عن طالب
+                </label>
+                <input
+                  className="admin-form__input"
+                  id="existing-search"
+                  type="search"
+                  placeholder="الاسم الكامل، رقم الهاتف، أو اسم الوالدين…"
+                  value={existingQuery}
+                  onChange={(event) => setExistingQuery(event.target.value)}
+                />
+              </div>
+
+              {existingQuery.trim() !== '' &&
+                (availableMatches.length === 0 ? (
+                  <p className="admin-picker__empty">
+                    {availableStudents.length === 0
+                      ? 'كل الطلاب مسجّلون في هذه المجموعة بالفعل.'
+                      : 'لا يوجد طلاب مطابقون للبحث.'}
+                  </p>
+                ) : (
+                  <div className="admin-picker">
+                    {availableMatches.map((student) => (
+                      <div className="admin-picker__item" key={student.id}>
+                        <div className="admin-picker__info">
+                          <h3 className="group-student__name">
+                            {student.full_name}
+                          </h3>
+                          <p className="group-student__meta">
+                            {student.level_display}
+                            {student.class_name_display
+                              ? ` — ${student.class_name_display}`
+                              : ''}
+                          </p>
+                          <p className="group-student__meta">
+                            هاتف المسؤول: {student.responsible_phone1 || '—'}
+                          </p>
+                        </div>
+                        <button
+                          className="lp-btn"
+                          type="button"
+                          disabled={saving}
+                          onClick={() => addStudent(student)}
+                        >
+                          إضافة
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+
+              <div className="admin-form__actions">
+                <button
+                  className="lp-btn lp-btn--outline"
+                  type="button"
+                  onClick={closeExistingPicker}
+                >
+                  إغلاق
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {showStudentForm && (

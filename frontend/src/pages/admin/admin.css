@@ -64,6 +64,24 @@
   margin-bottom: 24px;
 }
 
+/* Search + filter bar (echol manager). */
+.admin-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.admin-filters__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-filters__search {
+  grid-column: 1 / -1;
+}
+
 /* Smaller buttons, scoped to the admin area only. */
 .admin-main__head .lp-btn,
 .admin-toolbar .lp-btn,
@@ -114,6 +132,86 @@
 .admin-modal__title {
   margin: 0 0 20px;
   font-size: 22px;
+}
+
+/* Add-student chooser (new vs existing) */
+.admin-modal__card--narrow {
+  max-width: 420px;
+}
+
+.admin-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 20px;
+}
+
+.admin-choice__option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--accent);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  text-align: start;
+  cursor: pointer;
+}
+
+.admin-choice__option:hover {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.admin-choice__option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.admin-choice__title {
+  color: var(--text-h);
+  font-family: var(--heading);
+  font-weight: 700;
+  font-size: 17px;
+}
+
+.admin-choice__hint {
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* Existing-student picker (search + results) */
+.admin-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+  margin: 16px 0;
+}
+
+.admin-picker__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.admin-picker__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-picker__empty {
+  margin: 16px 0;
+  color: var(--text);
 }
 
 .admin-form {
