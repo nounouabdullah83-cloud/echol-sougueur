@@ -30,3 +30,18 @@ export function createGroup(payload) {
 export function fetchGroup(id) {
   return apiRequest(`/api/groups/${id}/`).then(toResult)
 }
+
+/** PATCH /api/groups/:id/ — update a group (e.g. add/remove students). */
+export function updateGroup(id, payload) {
+  return apiRequest(`/api/groups/${id}/`, { method: 'PATCH', body: payload }).then(
+    toResult,
+  )
+}
+
+/** POST /api/groups/:id/add_student/ — create a student and join them to the group. */
+export function addStudentToGroup(groupId, payload) {
+  return apiRequest(`/api/groups/${groupId}/add_student/`, {
+    method: 'POST',
+    body: payload,
+  }).then(toResult)
+}

@@ -1,13 +1,21 @@
 from django.contrib import admin
 
-from .models import Group, Student, Subject, Teacher
+from .models import Group, Student, Teacher
 
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ('id', 'first_name', 'last_name', 'level', 'birthdate', 'registration_date')
-    list_filter = ('level',)
-    search_fields = ('first_name', 'last_name')
+    list_display = (
+        'id',
+        'first_name',
+        'last_name',
+        'sex',
+        'school',
+        'birthdate',
+        'registration_date',
+    )
+    list_filter = ('sex',)
+    search_fields = ('first_name', 'last_name', 'school')
 
 
 @admin.register(Teacher)
@@ -18,13 +26,15 @@ class TeacherAdmin(admin.ModelAdmin):
 
 @admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
-    list_display = ('id', 'group_number', 'teacher', 'revenue_per_student')
-    search_fields = ('group_number', 'teacher__full_name')
+    list_display = (
+        'id',
+        'group_number',
+        'subject',
+        'level',
+        'class_name',
+        'teacher',
+        'revenue_per_student',
+    )
+    list_filter = ('level', 'class_name')
+    search_fields = ('group_number', 'subject', 'teacher__full_name')
     filter_horizontal = ('students',)
-
-
-@admin.register(Subject)
-class SubjectAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name')
-    search_fields = ('name',)
-    filter_horizontal = ('teachers', 'groups')

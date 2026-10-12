@@ -5,6 +5,8 @@ import LoginPage from './pages/auth/LoginPage'
 import ResetPasswordPage from './pages/auth/ResetPasswordPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 import EcholManagerPage from './pages/admin/echolmanager/EcholManagerPage'
+import GroupViewPage from './pages/admin/groupview/GroupViewPage'
+import StudentDetailsPage from './pages/admin/studentdetails/StudentDetailsPage'
 import FinanceManagerPage from './pages/admin/financemanager/FinanceManagerPage'
 import AdminDashboardPage from './pages/admin/dashboard/DashboardPage'
 import ProtectedRoute from './authcontext/ProtectedRoute'
@@ -28,6 +30,22 @@ function App() {
         element={
           <ProtectedRoute>
             <EcholManagerPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/groups/:id"
+        element={
+          <ProtectedRoute>
+            <GroupViewPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/students/:id"
+        element={
+          <ProtectedRoute>
+            <StudentDetailsPage />
           </ProtectedRoute>
         }
       />

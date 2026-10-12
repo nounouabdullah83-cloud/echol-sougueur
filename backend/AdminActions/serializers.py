@@ -1,10 +1,14 @@
 from rest_framework import serializers
 
-from .models import Group, Student, Subject, Teacher
+from .models import Group, Student, Teacher
 
 
 class StudentSerializer(serializers.ModelSerializer):
-    level_display = serializers.CharField(source='get_level_display', read_only=True)
+    sex_display = serializers.CharField(source='get_sex_display', read_only=True)
+    level = serializers.SerializerMethodField()
+    level_display = serializers.SerializerMethodField()
+    class_name = serializers.SerializerMethodField()
+    class_name_display = serializers.SerializerMethodField()
 
     class Meta:
         model = Student
@@ -14,11 +18,45 @@ class StudentSerializer(serializers.ModelSerializer):
             'last_name',
             'full_name',
             'birthdate',
+            'birthplace',
+            'sex',
+            'sex_display',
+            'school',
+            'father_name',
+            'mother_first_name',
+            'mother_last_name',
+            'responsible_phone1',
+            'responsible_phone2',
+            'address',
             'registration_date',
             'level',
             'level_display',
+            'class_name',
+            'class_name_display',
         )
         read_only_fields = ('id', 'full_name')
+
+    def _first_group(self, obj):
+        try:
+            return obj.groups.first()
+        except (TypeError, AttributeError):
+            return None
+
+    def get_level(self, obj):
+        group = self._first_group(obj)
+        return group.level if group else None
+
+    def get_level_display(self, obj):
+        group = self._first_group(obj)
+        return group.get_level_display() if group else None
+
+    def get_class_name(self, obj):
+        group = self._first_group(obj)
+        return group.class_name if group else ''
+
+    def get_class_name_display(self, obj):
+        group = self._first_group(obj)
+        return group.get_class_name_display() if group else ''
 
 
 class TeacherSerializer(serializers.ModelSerializer):
@@ -32,30 +70,39 @@ class GroupSerializer(serializers.ModelSerializer):
     students = serializers.PrimaryKeyRelatedField(
         queryset=Student.objects.all(), many=True, required=False
     )
+    students_detail = StudentSerializer(source='students', many=True, read_only=True)
     teacher_name = serializers.CharField(source='teacher.full_name', read_only=True)
+    level_display = serializers.CharField(source='get_level_display', read_only=True)
+    class_name_display = serializers.CharField(
+        source='get_class_name_display', read_only=True
+    )
 
     class Meta:
         model = Group
         fields = (
             'id',
             'group_number',
+            'subject',
+            'level',
+            'level_display',
+            'class_name',
+            'class_name_display',
             'students',
+            'students_detail',
             'teacher',
             'teacher_name',
             'revenue_per_student',
         )
         read_only_fields = ('id',)
 
-
-class SubjectSerializer(serializers.ModelSerializer):
-    teachers = serializers.PrimaryKeyRelatedField(
-        queryset=Teacher.objects.all(), many=True, required=False
-    )
-    groups = serializers.PrimaryKeyRelatedField(
-        queryset=Group.objects.all(), many=True, required=False
-    )
-
-    class Meta:
-        model = Subject
-        fields = ('id', 'name', 'teachers', 'groups')
-        read_only_fields = ('id',)
+    def validate(self, attrs):
+        """Ensure `class_name` is one of the classes allowed for `level`."""
+        level = attrs.get('level', getattr(self.instance, 'level', None))
+        class_name = attrs.get('class_name', getattr(self.instance, 'class_name', ''))
+        if class_name and level:
+            allowed = Group.classes_for_level(level)
+            if class_name not in allowed:
+                raise serializers.ValidationError(
+                    {'class_name': 'هذا القسم غير متاح للمستوى المختار.'}
+                )
+        return attrs

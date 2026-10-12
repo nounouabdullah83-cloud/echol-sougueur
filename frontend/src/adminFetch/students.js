@@ -18,3 +18,13 @@ async function toResult(response) {
 export function fetchStudents() {
   return apiRequest('/api/students/').then(toResult)
 }
+
+/** GET /api/students/:id/ — single student. */
+export function fetchStudent(id) {
+  return apiRequest(`/api/students/${id}/`).then(toResult)
+}
+
+/** POST /api/students/ — create a student. */
+export function createStudent(payload) {
+  return apiRequest('/api/students/', { method: 'POST', body: payload }).then(toResult)
+}

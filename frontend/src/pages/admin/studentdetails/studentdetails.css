@@ -1,0 +1,103 @@
+/* ============================================================= */
+/* STUDENT DETAILS — a standalone "paper" that shows one student. */
+/* Follows design.md: black/white/blue, radius 0, no transitions. */
+/* ============================================================= */
+
+.student-paper-page {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 48px 24px;
+  background: var(--surface);
+  box-sizing: border-box;
+}
+
+.student-paper {
+  width: 100%;
+  max-width: 760px;
+  padding: 40px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  box-shadow: var(--shadow);
+  box-sizing: border-box;
+}
+
+.student-paper__head {
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.student-paper__eyebrow {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-family: var(--heading);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+}
+
+.student-paper__title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.3;
+}
+
+.student-paper__status {
+  margin: 0 0 20px;
+  color: var(--text);
+}
+
+.student-paper__status--error {
+  padding: 12px 14px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.student-paper__rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px 32px;
+}
+
+.student-paper__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.student-paper__label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.student-paper__value {
+  color: var(--text-h);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.student-paper__actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 1024px) {
+  .student-paper-page {
+    padding: 24px 16px;
+  }
+
+  .student-paper {
+    padding: 24px 20px;
+  }
+}
