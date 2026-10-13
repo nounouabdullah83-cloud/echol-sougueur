@@ -28,3 +28,13 @@ export function fetchStudent(id) {
 export function createStudent(payload) {
   return apiRequest('/api/students/', { method: 'POST', body: payload }).then(toResult)
 }
+
+/**
+ * POST /api/students/:id/renew_subscription/ — reactivate the student's
+ * subscription for another period and reset its renewal date.
+ */
+export function renewStudentSubscription(id) {
+  return apiRequest(`/api/students/${id}/renew_subscription/`, {
+    method: 'POST',
+  }).then(toResult)
+}

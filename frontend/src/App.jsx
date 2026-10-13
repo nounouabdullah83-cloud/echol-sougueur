@@ -7,6 +7,7 @@ import DashboardPage from './pages/dashboard/DashboardPage'
 import EcholManagerPage from './pages/admin/echolmanager/EcholManagerPage'
 import GroupViewPage from './pages/admin/groupview/GroupViewPage'
 import StudentDetailsPage from './pages/admin/studentdetails/StudentDetailsPage'
+import TeacherDetailsPage from './pages/admin/teacherdetails/TeacherDetailsPage'
 import FinanceManagerPage from './pages/admin/financemanager/FinanceManagerPage'
 import AdminDashboardPage from './pages/admin/dashboard/DashboardPage'
 import ProtectedRoute from './authcontext/ProtectedRoute'
@@ -46,6 +47,14 @@ function App() {
         element={
           <ProtectedRoute>
             <StudentDetailsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/teachers/:id"
+        element={
+          <ProtectedRoute>
+            <TeacherDetailsPage />
           </ProtectedRoute>
         }
       />

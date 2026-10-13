@@ -423,6 +423,28 @@
   color: var(--text);
 }
 
+/* Subscription state badge shown on student cards. */
+.subscription-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  font-family: var(--heading);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  color: #fff;
+}
+
+.subscription-badge--on {
+  background: #1f9d55;
+}
+
+.subscription-badge--off {
+  background: #d64545;
+}
+
 .group-student .lp-btn {
   align-self: flex-start;
   margin-top: 8px;
@@ -434,6 +456,124 @@
 .group-student .lp-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* ---------- Teacher section (echol manager) ---------- */
+.teacher-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.teacher-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.teacher-banner__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.teacher-banner__title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.teacher-banner__meta {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.teacher-banner__amount {
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.teacher-banner__cta {
+  align-self: flex-start;
+  margin-top: auto;
+  min-height: 34px;
+  padding: 6px 14px;
+  font-size: 14px;
+}
+
+/* Destructive action (delete teacher) — used inside admin pages/modals. */
+.lp-btn--danger {
+  background: #d64545;
+  border-color: #d64545;
+  color: #fff;
+}
+
+.lp-btn--danger:hover {
+  background: #b93a3a;
+  border-color: #b93a3a;
+}
+
+.lp-btn--danger:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---------- Pagination (shared admin lists) ---------- */
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.pagination__btn {
+  min-width: 36px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-family: var(--heading);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pagination__btn:hover:not(:disabled) {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.pagination__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pagination__btn--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.pagination__btn--active:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.pagination__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pagination__gap {
+  color: var(--text);
+  font-weight: 700;
 }
 
 @media (max-width: 1024px) {

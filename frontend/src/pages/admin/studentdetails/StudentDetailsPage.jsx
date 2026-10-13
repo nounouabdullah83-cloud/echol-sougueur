@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { brand } from '../../landingpage/landingData'
 import { extractErrorMessage } from '../../../api/errors'
-import { fetchStudent } from '../../../adminFetch/students'
+import { fetchStudent, renewStudentSubscription } from '../../../adminFetch/students'
 import { fetchGroups } from '../../../adminFetch/groups'
 import './studentdetails.css'
 
@@ -29,6 +29,8 @@ export default function StudentDetailsPage() {
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [renewing, setRenewing] = useState(false)
+  const [renewError, setRenewError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -74,6 +76,22 @@ export default function StudentDetailsPage() {
     (sum, group) => sum + (Number(group.revenue_per_student) || 0),
     0,
   )
+
+  async function handleRenewSubscription() {
+    if (!student?.id || student.is_subscribed) return
+    setRenewing(true)
+    setRenewError('')
+    try {
+      const result = await renewStudentSubscription(student.id)
+      if (result.ok) {
+        setStudent(result.data)
+      } else {
+        setRenewError(extractErrorMessage(result.data))
+      }
+    } finally {
+      setRenewing(false)
+    }
+  }
 
   return (
     <div className="student-paper-page">
@@ -170,7 +188,28 @@ export default function StudentDetailsPage() {
                 {student.registration_date || '—'}
               </span>
             </div>
+            <div className="student-paper__row">
+              <span className="student-paper__label">تاريخ تجديد الاشتراك</span>
+              <span className="student-paper__value">
+                {student.renewal_subscription_date || '—'}
+              </span>
+            </div>
+            <div className="student-paper__row">
+              <span className="student-paper__label">تاريخ انتهاء الاشتراك</span>
+              <span className="student-paper__value">
+                {student.subscription_expiry_date || '—'}
+              </span>
+            </div>
           </div>
+        )}
+
+        {renewError && (
+          <p
+            className="student-paper__status student-paper__status--error"
+            role="alert"
+          >
+            {renewError}
+          </p>
         )}
 
         {student && !loading && (
@@ -238,6 +277,20 @@ export default function StudentDetailsPage() {
           >
             رجوع
           </button>
+          {student && !loading && (
+            <button
+              type="button"
+              className={`student-paper__subscribe ${
+                student.is_subscribed
+                  ? 'student-paper__subscribe--on'
+                  : 'student-paper__subscribe--off'
+              }`}
+              disabled={student.is_subscribed || renewing}
+              onClick={handleRenewSubscription}
+            >
+              {student.is_subscribed ? 'subscribed' : 'unsubscribed'}
+            </button>
+          )}
         </div>
       </article>
     </div>

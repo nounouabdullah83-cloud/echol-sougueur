@@ -13,8 +13,10 @@ class StudentAdmin(admin.ModelAdmin):
         'school',
         'birthdate',
         'registration_date',
+        'is_subscribed',
+        'renewal_subscription_date',
     )
-    list_filter = ('sex',)
+    list_filter = ('sex', 'is_subscribed')
     search_fields = ('first_name', 'last_name', 'school')
 
 

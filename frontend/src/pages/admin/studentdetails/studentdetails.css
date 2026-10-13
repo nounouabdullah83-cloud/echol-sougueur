@@ -147,9 +147,46 @@
   outline-offset: 2px;
 }
 
+.student-paper__subscribe {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  font-family: var(--heading);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.student-paper__subscribe--on {
+  background: #1f9d55;
+  border-color: #1f9d55;
+  cursor: default;
+}
+
+.student-paper__subscribe--off {
+  background: #d64545;
+  border-color: #d64545;
+}
+
+.student-paper__subscribe--off:hover {
+  background: #b93a3a;
+  border-color: #b93a3a;
+}
+
+.student-paper__subscribe:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .student-paper__actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   margin-top: 32px;
   padding-top: 24px;
   border-top: 1px solid var(--border);

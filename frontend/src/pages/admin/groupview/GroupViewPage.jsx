@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import Sidebar from '../../../components/sidebar/Sidebar'
+import SubscriptionBadge from '../../../components/student/SubscriptionBadge'
 import { brand } from '../../landingpage/landingData'
 import { extractErrorMessage } from '../../../api/errors'
 import { addStudentToGroup, fetchGroup, updateGroup } from '../../../adminFetch/groups'
@@ -337,6 +338,7 @@ export default function GroupViewPage() {
                         <h3 className="group-student__name">
                           {student.full_name}
                         </h3>
+                        <SubscriptionBadge isSubscribed={student.is_subscribed} />
                         <p className="group-student__meta">
                           {student.level_display}
                           {student.class_name_display

@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import Sidebar from '../../../components/sidebar/Sidebar'
+import SubscriptionBadge from '../../../components/student/SubscriptionBadge'
+import TeacherBanner from '../../../components/teacher/TeacherBanner'
+import Pagination from '../../../components/pagination/Pagination'
 import { brand } from '../../landingpage/landingData'
 import { extractErrorMessage } from '../../../api/errors'
 import { createGroup, fetchGroups } from '../../../adminFetch/groups'
 import { fetchStudents } from '../../../adminFetch/students'
-import { fetchTeachers } from '../../../adminFetch/teachers'
+import { createTeacher, fetchTeachers } from '../../../adminFetch/teachers'
+import { fetchTeacherRevenues } from '../../../adminFetch/revenues'
 import '../admin.css'
 
 /**
@@ -41,15 +45,21 @@ const levels = [
   { value: 'secondary', label: 'ثانوية' },
 ]
 
+/** Number of cards shown per page in the groups and teachers sections. */
+const PAGE_SIZE = 10
+
 /**
  * echol manager — admin home.
  *
- * Renders the shared admin sidebar and a "create group" button that opens a
- * modal form wired to POST /api/groups/.
+ * Renders the shared admin sidebar, a "create group" button wired to
+ * POST /api/groups/ and an "add teacher" button wired to POST /api/teachers/.
+ * Below the paginated groups grid it lists the teachers (banners linking to
+ * each teacher's card page). Groups and teachers are paginated 10 per page.
  */
 export default function EcholManagerPage() {
   const [isOpen, setIsOpen] = useState(false)
   const [teachers, setTeachers] = useState([])
+  const [teacherRevenues, setTeacherRevenues] = useState([])
   const [groups, setGroups] = useState([])
   const [students, setStudents] = useState([])
   const [groupsLoading, setGroupsLoading] = useState(false)
@@ -63,24 +73,36 @@ export default function EcholManagerPage() {
   const [levelFilter, setLevelFilter] = useState('')
   const [classFilter, setClassFilter] = useState('')
 
-  const [groupNumber, setGroupNumber] = useState('')
   const [subject, setSubject] = useState('')
   const [groupLevel, setGroupLevel] = useState('primary')
   const [groupClass, setGroupClass] = useState('')
   const [teacherId, setTeacherId] = useState('')
   const [revenue, setRevenue] = useState('')
 
-  // Load groups and students once on mount.
+  // "Add teacher" modal state.
+  const [isTeacherFormOpen, setIsTeacherFormOpen] = useState(false)
+  const [teacherName, setTeacherName] = useState('')
+  const [teacherSubmitting, setTeacherSubmitting] = useState(false)
+  const [teacherError, setTeacherError] = useState('')
+
+  // Pagination (10 cards per page for both sections).
+  const [groupsPage, setGroupsPage] = useState(1)
+  const [teachersPage, setTeachersPage] = useState(1)
+
+  // Load groups, students, teachers and their revenues once on mount.
   useEffect(() => {
     let cancelled = false
 
     async function loadData() {
       setGroupsLoading(true)
       try {
-        const [groupsResult, studentsResult] = await Promise.all([
-          fetchGroups(),
-          fetchStudents(),
-        ])
+        const [groupsResult, studentsResult, teachersResult, revenuesResult] =
+          await Promise.all([
+            fetchGroups(),
+            fetchStudents(),
+            fetchTeachers(),
+            fetchTeacherRevenues(),
+          ])
         if (cancelled) return
         if (groupsResult.ok) {
           setGroups(groupsResult.data)
@@ -88,6 +110,8 @@ export default function EcholManagerPage() {
           setGroupsError(extractErrorMessage(groupsResult.data))
         }
         if (studentsResult.ok) setStudents(studentsResult.data)
+        if (teachersResult.ok) setTeachers(teachersResult.data)
+        if (revenuesResult.ok) setTeacherRevenues(revenuesResult.data)
       } finally {
         if (!cancelled) setGroupsLoading(false)
       }
@@ -98,24 +122,6 @@ export default function EcholManagerPage() {
       cancelled = true
     }
   }, [])
-
-  // Load teachers the first time the form opens.
-  useEffect(() => {
-    if (!isOpen || teachers.length) return
-
-    let cancelled = false
-
-    async function loadTeachers() {
-      const result = await fetchTeachers()
-      if (cancelled) return
-      if (result.ok) setTeachers(result.data)
-    }
-
-    loadTeachers()
-    return () => {
-      cancelled = true
-    }
-  }, [isOpen, teachers.length])
 
   function openForm() {
     setError('')
@@ -128,6 +134,44 @@ export default function EcholManagerPage() {
     setIsOpen(false)
   }
 
+  function openTeacherForm() {
+    setTeacherError('')
+    setSuccess('')
+    setTeacherName('')
+    setIsTeacherFormOpen(true)
+  }
+
+  function closeTeacherForm() {
+    setTeacherError('')
+    setIsTeacherFormOpen(false)
+  }
+
+  async function handleCreateTeacher(event) {
+    event.preventDefault()
+    setTeacherError('')
+    setTeacherSubmitting(true)
+
+    try {
+      const result = await createTeacher({ full_name: teacherName.trim() })
+
+      if (!result.ok) {
+        setTeacherError(extractErrorMessage(result.data))
+        return
+      }
+
+      setIsTeacherFormOpen(false)
+      setTeacherName('')
+      setSuccess(`تم إضافة المعلم ${result.data.full_name}.`)
+      setTeachers((current) =>
+        [...current, result.data].sort((a, b) =>
+          a.full_name.localeCompare(b.full_name, 'ar'),
+        ),
+      )
+    } finally {
+      setTeacherSubmitting(false)
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
@@ -135,7 +179,6 @@ export default function EcholManagerPage() {
 
     try {
       const result = await createGroup({
-        group_number: Number(groupNumber),
         subject: subject,
         level: groupLevel,
         class_name: groupClass,
@@ -150,7 +193,6 @@ export default function EcholManagerPage() {
 
       setIsOpen(false)
       setSuccess(`تم إنشاء المجموعة رقم ${result.data.group_number}.`)
-      setGroupNumber('')
       setSubject('')
       setGroupLevel('primary')
       setGroupClass('')
@@ -178,6 +220,38 @@ export default function EcholManagerPage() {
     if (classFilter && group.class_name !== classFilter) return false
     return true
   })
+
+  // Groups: 10 per page. The page is clamped so a shrinking list never
+  // leaves the section stuck on an out-of-range page.
+  const groupsPageCount = Math.max(1, Math.ceil(filteredGroups.length / PAGE_SIZE))
+  const safeGroupsPage = Math.min(groupsPage, groupsPageCount)
+  const visibleGroups = filteredGroups.slice(
+    (safeGroupsPage - 1) * PAGE_SIZE,
+    safeGroupsPage * PAGE_SIZE,
+  )
+
+  // Teachers, enriched with their revenue summary and the number of groups
+  // they teach, then sliced to 10 per page.
+  const revenueByTeacher = new Map(
+    teacherRevenues.map((row) => [row.id, row]),
+  )
+  const groupCountByTeacher = groups.reduce((accumulator, group) => {
+    if (group.teacher) {
+      accumulator[group.teacher] = (accumulator[group.teacher] || 0) + 1
+    }
+    return accumulator
+  }, {})
+  const teacherRows = teachers.map((teacher) => ({
+    ...teacher,
+    ...(revenueByTeacher.get(teacher.id) || {}),
+    groupsCount: groupCountByTeacher[teacher.id] || 0,
+  }))
+  const teachersPageCount = Math.max(1, Math.ceil(teacherRows.length / PAGE_SIZE))
+  const safeTeachersPage = Math.min(teachersPage, teachersPageCount)
+  const visibleTeachers = teacherRows.slice(
+    (safeTeachersPage - 1) * PAGE_SIZE,
+    safeTeachersPage * PAGE_SIZE,
+  )
 
   // Search students by full name, phone numbers, and parents' names.
   const normalizedQuery = searchQuery.trim().toLowerCase().replace(/[\s-]+/g, '')
@@ -228,6 +302,13 @@ export default function EcholManagerPage() {
           >
             create group
           </button>
+          <button
+            className="lp-btn"
+            type="button"
+            onClick={openTeacherForm}
+          >
+            add teacher
+          </button>
         </div>
 
         <div className="admin-filters">
@@ -253,7 +334,10 @@ export default function EcholManagerPage() {
               className="admin-form__input"
               id="filter-subject"
               value={subjectFilter}
-              onChange={(event) => setSubjectFilter(event.target.value)}
+              onChange={(event) => {
+                setSubjectFilter(event.target.value)
+                setGroupsPage(1)
+              }}
             >
               <option value="">كل المواد</option>
               {subjects.map((subject) => (
@@ -275,6 +359,7 @@ export default function EcholManagerPage() {
               onChange={(event) => {
                 setLevelFilter(event.target.value)
                 setClassFilter('')
+                setGroupsPage(1)
               }}
             >
               <option value="">كل المستويات</option>
@@ -294,7 +379,10 @@ export default function EcholManagerPage() {
               className="admin-form__input"
               id="filter-class"
               value={classFilter}
-              onChange={(event) => setClassFilter(event.target.value)}
+              onChange={(event) => {
+                setClassFilter(event.target.value)
+                setGroupsPage(1)
+              }}
             >
               <option value="">كل الأقسام</option>
               {classOptions.map((item) => (
@@ -329,6 +417,7 @@ export default function EcholManagerPage() {
                       <h3 className="group-student__name">
                         {student.full_name}
                       </h3>
+                      <SubscriptionBadge isSubscribed={student.is_subscribed} />
                       <p className="group-student__meta">
                         {student.level_display}
                         {student.class_name_display
@@ -357,7 +446,7 @@ export default function EcholManagerPage() {
           )}
 
           <div className="group-grid">
-            {filteredGroups.map((group) => (
+            {visibleGroups.map((group) => (
               <Link
                 className="group-card"
                 key={group.id}
@@ -376,6 +465,38 @@ export default function EcholManagerPage() {
               </Link>
             ))}
           </div>
+
+          <Pagination
+            page={safeGroupsPage}
+            pageCount={groupsPageCount}
+            onChange={setGroupsPage}
+          />
+        </section>
+
+        <section>
+          <h2 className="admin-section__title">المعلمون</h2>
+
+          {teachers.length === 0 ? (
+            <p>لا يوجد معلمون بعد.</p>
+          ) : (
+            <>
+              <div className="teacher-grid">
+                {visibleTeachers.map((teacher) => (
+                  <TeacherBanner
+                    key={teacher.id}
+                    teacher={teacher}
+                    groupsCount={teacher.groupsCount}
+                  />
+                ))}
+              </div>
+
+              <Pagination
+                page={safeTeachersPage}
+                pageCount={teachersPageCount}
+                onChange={setTeachersPage}
+              />
+            </>
+          )}
         </section>
 
         {isOpen && (
@@ -391,21 +512,6 @@ export default function EcholManagerPage() {
               </h2>
 
               <form className="admin-form" onSubmit={handleSubmit}>
-                <div className="admin-form__field">
-                  <label className="admin-form__label" htmlFor="group-number">
-                    رقم المجموعة
-                  </label>
-                  <input
-                    className="admin-form__input"
-                    id="group-number"
-                    type="number"
-                    min="1"
-                    required
-                    value={groupNumber}
-                    onChange={(event) => setGroupNumber(event.target.value)}
-                  />
-                </div>
-
                 <div className="admin-form__field">
                   <label className="admin-form__label" htmlFor="group-subject">
                     المادة
@@ -510,6 +616,60 @@ export default function EcholManagerPage() {
                   </button>
                   <button className="lp-btn" type="submit" disabled={submitting}>
                     {submitting ? 'جارٍ الإنشاء…' : 'إنشاء'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {isTeacherFormOpen && (
+          <div
+            className="admin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-teacher-title"
+          >
+            <div className="admin-modal__card admin-modal__card--narrow">
+              <h2 className="admin-modal__title" id="create-teacher-title">
+                إضافة معلم
+              </h2>
+
+              <form className="admin-form" onSubmit={handleCreateTeacher}>
+                <div className="admin-form__field">
+                  <label className="admin-form__label" htmlFor="teacher-name">
+                    الاسم الكامل
+                  </label>
+                  <input
+                    className="admin-form__input"
+                    id="teacher-name"
+                    type="text"
+                    required
+                    value={teacherName}
+                    onChange={(event) => setTeacherName(event.target.value)}
+                  />
+                </div>
+
+                {teacherError && (
+                  <p className="admin-notice admin-notice--error" role="alert">
+                    {teacherError}
+                  </p>
+                )}
+
+                <div className="admin-form__actions">
+                  <button
+                    className="lp-btn lp-btn--outline"
+                    type="button"
+                    onClick={closeTeacherForm}
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    className="lp-btn"
+                    type="submit"
+                    disabled={teacherSubmitting}
+                  >
+                    {teacherSubmitting ? 'جارٍ الإضافة…' : 'إضافة'}
                   </button>
                 </div>
               </form>
