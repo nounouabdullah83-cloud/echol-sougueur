@@ -240,6 +240,7 @@ export default function TeacherDetailsPage() {
                         <th>الشهر</th>
                         <th>النوع</th>
                         <th>الطالب</th>
+                        <th>المجموعة</th>
                         <th>المبلغ</th>
                       </tr>
                     </thead>
@@ -249,6 +250,7 @@ export default function TeacherDetailsPage() {
                           <td>{formatMonth(entry.month)}</td>
                           <td>{entry.kind_display}</td>
                           <td>{entry.student_name}</td>
+                          <td>{entry.group_number ? `group ${entry.group_number}` : '—'}</td>
                           <td>{formatCost(entry.amount)}</td>
                         </tr>
                       ))}

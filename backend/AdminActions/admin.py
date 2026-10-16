@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Group, Student, Teacher
+from .models import Enrollment, Group, Student, Teacher
 
 
 @admin.register(Student)
@@ -13,10 +13,8 @@ class StudentAdmin(admin.ModelAdmin):
         'school',
         'birthdate',
         'registration_date',
-        'is_subscribed',
-        'renewal_subscription_date',
     )
-    list_filter = ('sex', 'is_subscribed')
+    list_filter = ('sex',)
     search_fields = ('first_name', 'last_name', 'school')
 
 
@@ -24,6 +22,14 @@ class StudentAdmin(admin.ModelAdmin):
 class TeacherAdmin(admin.ModelAdmin):
     list_display = ('id', 'full_name')
     search_fields = ('full_name',)
+
+
+class EnrollmentInline(admin.TabularInline):
+    """Edit a group's memberships (and their subscriptions) inline."""
+
+    model = Enrollment
+    extra = 0
+    autocomplete_fields = ('student',)
 
 
 @admin.register(Group)
@@ -39,4 +45,19 @@ class GroupAdmin(admin.ModelAdmin):
     )
     list_filter = ('level', 'class_name')
     search_fields = ('group_number', 'subject', 'teacher__full_name')
-    filter_horizontal = ('students',)
+    inlines = (EnrollmentInline,)
+
+
+@admin.register(Enrollment)
+class EnrollmentAdmin(admin.ModelAdmin):
+    list_display = (
+        'id',
+        'group',
+        'student',
+        'joined_on',
+        'renewal_date',
+        'is_active',
+    )
+    list_filter = ('is_active',)
+    search_fields = ('student__first_name', 'student__last_name', 'group__group_number')
+    autocomplete_fields = ('group', 'student')

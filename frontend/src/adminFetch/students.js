@@ -30,11 +30,10 @@ export function createStudent(payload) {
 }
 
 /**
- * POST /api/students/:id/renew_subscription/ — reactivate the student's
- * subscription for another period and reset its renewal date.
+ * DELETE /api/students/:id/ — permanently delete a student from the database.
+ *
+ * Also clears the student's group memberships and revenue entries (cascade).
  */
-export function renewStudentSubscription(id) {
-  return apiRequest(`/api/students/${id}/renew_subscription/`, {
-    method: 'POST',
-  }).then(toResult)
+export function deleteStudent(id) {
+  return apiRequest(`/api/students/${id}/`, { method: 'DELETE' }).then(toResult)
 }

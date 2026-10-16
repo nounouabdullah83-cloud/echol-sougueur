@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import Sidebar from '../../../components/sidebar/Sidebar'
@@ -89,6 +89,20 @@ export default function EcholManagerPage() {
   const [groupsPage, setGroupsPage] = useState(1)
   const [teachersPage, setTeachersPage] = useState(1)
 
+  /**
+   * Refetch the teacher list together with their revenue summaries. Used on
+   * mount and after a teacher is added, so a teacher created in this session
+   * shows the same banner data a full page refresh would show.
+   */
+  const loadTeachersAndRevenues = useCallback(async () => {
+    const [teachersResult, revenuesResult] = await Promise.all([
+      fetchTeachers(),
+      fetchTeacherRevenues(),
+    ])
+    if (teachersResult.ok) setTeachers(teachersResult.data)
+    if (revenuesResult.ok) setTeacherRevenues(revenuesResult.data)
+  }, [])
+
   // Load groups, students, teachers and their revenues once on mount.
   useEffect(() => {
     let cancelled = false
@@ -96,13 +110,10 @@ export default function EcholManagerPage() {
     async function loadData() {
       setGroupsLoading(true)
       try {
-        const [groupsResult, studentsResult, teachersResult, revenuesResult] =
-          await Promise.all([
-            fetchGroups(),
-            fetchStudents(),
-            fetchTeachers(),
-            fetchTeacherRevenues(),
-          ])
+        const [groupsResult, studentsResult] = await Promise.all([
+          fetchGroups(),
+          fetchStudents(),
+        ])
         if (cancelled) return
         if (groupsResult.ok) {
           setGroups(groupsResult.data)
@@ -110,8 +121,7 @@ export default function EcholManagerPage() {
           setGroupsError(extractErrorMessage(groupsResult.data))
         }
         if (studentsResult.ok) setStudents(studentsResult.data)
-        if (teachersResult.ok) setTeachers(teachersResult.data)
-        if (revenuesResult.ok) setTeacherRevenues(revenuesResult.data)
+        await loadTeachersAndRevenues()
       } finally {
         if (!cancelled) setGroupsLoading(false)
       }
@@ -121,7 +131,7 @@ export default function EcholManagerPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadTeachersAndRevenues])
 
   function openForm() {
     setError('')
@@ -162,11 +172,9 @@ export default function EcholManagerPage() {
       setIsTeacherFormOpen(false)
       setTeacherName('')
       setSuccess(`تم إضافة المعلم ${result.data.full_name}.`)
-      setTeachers((current) =>
-        [...current, result.data].sort((a, b) =>
-          a.full_name.localeCompare(b.full_name, 'ar'),
-        ),
-      )
+      // Refetch teacher + revenue data so the new banner shows the full
+      // summary (students count and revenue), not just the group count.
+      await loadTeachersAndRevenues()
     } finally {
       setTeacherSubmitting(false)
     }

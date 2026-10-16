@@ -19,7 +19,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from AdminActions.models import Group, Level, Sex, Student, Teacher
+from AdminActions.models import Enrollment, Group, Level, Sex, Student, Teacher
 
 User = get_user_model()
 
@@ -194,4 +194,24 @@ class Command(BaseCommand):
             group.level = level
             group.class_name = random.choice(Group.classes_for_level(level))
             group.save(update_fields=['level', 'class_name'])
-            group.students.set(members)
+            self._set_members(group, members)
+
+    def _set_members(self, group, members):
+        """Sync a group's memberships, keeping seeded subscriptions realistic.
+
+        Enrollment dates default to *today*, which would mark every seeded
+        student as subscribed; seeding instead starts each subscription on the
+        student's registration date (September), so the demo data contains a
+        healthy mix of active and expired subscriptions — matching the old
+        behaviour where subscription dates defaulted to registration.
+        """
+        group.enrollments.exclude(student__in=members).delete()
+        for student in members:
+            Enrollment.objects.get_or_create(
+                group=group,
+                student=student,
+                defaults={
+                    'joined_on': student.registration_date,
+                    'renewal_date': student.registration_date,
+                },
+            )

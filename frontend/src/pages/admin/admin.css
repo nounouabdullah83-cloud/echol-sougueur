@@ -458,6 +458,18 @@
   cursor: default;
 }
 
+/* Renew / remove buttons under each student card. */
+.group-student__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.group-student__actions .lp-btn {
+  margin-top: 0;
+}
+
 /* ---------- Teacher section (echol manager) ---------- */
 .teacher-grid {
   display: grid;

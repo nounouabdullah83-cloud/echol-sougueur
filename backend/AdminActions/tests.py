@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from .models import (
+    Enrollment,
     Group,
     Level,
     SchoolClass,
@@ -36,6 +37,7 @@ class AdminActionsAPITests(APITestCase):
         self.client.credentials()
         for name in (
             'student-list',
+            'enrollment-list',
             'teacher-list',
             'group-list',
             'teacher-revenue-list',
@@ -108,6 +110,41 @@ class AdminActionsAPITests(APITestCase):
             reverse('AdminActions:student-detail', args=[student.id])
         )
         self.assertIsNone(updated.data['level_display'])
+
+    def test_delete_student(self):
+        teacher = Teacher.objects.create(full_name='Alan Turing')
+        group = Group.objects.create(
+            group_number=1,
+            subject='Mathematics',
+            level=Level.PRIMARY,
+            class_name=SchoolClass.FIRST_YEAR,
+            teacher=teacher,
+        )
+        student = Student.objects.create(
+            first_name='Ada',
+            last_name='Lovelace',
+            birthdate='2008-12-10',
+            registration_date='2026-09-01',
+        )
+        group.students.add(student)
+        TeacherRevenueEntry.objects.create(
+            teacher=teacher,
+            student=student,
+            month=timezone.localdate().replace(day=1),
+        )
+
+        response = self.client.delete(
+            reverse('AdminActions:student-detail', args=[student.id])
+        )
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Student.objects.filter(id=student.id).exists())
+        # The group survives, simply losing the member.
+        group.refresh_from_db()
+        self.assertEqual(list(group.students.all()), [])
+        # The student's revenue history cascades away with them.
+        self.assertFalse(
+            TeacherRevenueEntry.objects.filter(student_id=student.id).exists()
+        )
 
     def test_create_teacher(self):
         response = self.client.post(
@@ -210,10 +247,17 @@ class AdminActionsAPITests(APITestCase):
         self.assertEqual(group.students.count(), 1)
         student = group.students.first()
         self.assertEqual(student.full_name, 'Ada Lovelace')
+        # Joining the group creates an enrollment with its own subscription
+        # starting today, independent of any other group.
+        enrollment = group.enrollments.get(student=student)
+        self.assertEqual(enrollment.joined_on, timezone.localdate())
+        self.assertEqual(enrollment.renewal_date, timezone.localdate())
+        self.assertTrue(enrollment.is_subscription_active)
         # The student's level/class serializes from this group (M2M).
         member = response.data['students_detail'][0]
         self.assertEqual(member['level_display'], 'ابتدائية')
         self.assertEqual(member['class_name_display'], 'السنة الرابعة')
+        self.assertEqual(member['enrollments'][0]['renewal_date'], str(timezone.localdate()))
 
     def test_teacher_revenues(self):
         teacher = Teacher.objects.create(full_name='Alan Turing')
@@ -249,10 +293,11 @@ class AdminActionsAPITests(APITestCase):
         # Ada is shared with the teacher's other group, so she counts once.
         science.students.set([ada])
 
-        # Renewing a student credits each of their teachers once this month.
-        for student in (ada, alan):
+        # Renewing each enrollment credits its group's teacher — once per
+        # enrollment per month, so Ada (in two groups) earns two credits.
+        for enrollment in Enrollment.objects.filter(student__in=(ada, alan)):
             renew = self.client.post(
-                reverse('AdminActions:student-renew-subscription', args=[student.id])
+                reverse('AdminActions:enrollment-renew', args=[enrollment.id])
             )
             self.assertEqual(renew.status_code, status.HTTP_200_OK)
 
@@ -269,8 +314,10 @@ class AdminActionsAPITests(APITestCase):
 
         by_name = {row['full_name']: row for row in response.data}
         turing = by_name['Alan Turing']
+        # Students are counted distinctly…
         self.assertEqual(turing['students_count'], 2)
-        self.assertEqual(Decimal(turing['current_month_revenue']), Decimal('2000.00'))
+        # …but revenue accrues per group: Ada in 2 groups + Alan in 1 = 3000.
+        self.assertEqual(Decimal(turing['current_month_revenue']), Decimal('3000.00'))
         self.assertEqual(Decimal(turing['last_month_revenue']), Decimal('1000.00'))
         # A teacher with no students has no revenue.
         hopper = by_name['Grace Hopper']
@@ -295,10 +342,13 @@ class AdminActionsAPITests(APITestCase):
         )
         group.students.add(student)
 
-        # Renewing credits a subscription entry the teacher can see in history.
-        self.client.post(
-            reverse('AdminActions:student-renew-subscription', args=[student.id])
+        # Renewing the enrollment credits a subscription entry (tagged with
+        # its group) the teacher can see in history.
+        enrollment = group.enrollments.get(student=student)
+        renew = self.client.post(
+            reverse('AdminActions:enrollment-renew', args=[enrollment.id])
         )
+        self.assertEqual(renew.status_code, status.HTTP_200_OK)
 
         response = self.client.get(
             reverse('AdminActions:teacher-revenue-revenue-entries', args=[teacher.id])
@@ -309,6 +359,7 @@ class AdminActionsAPITests(APITestCase):
         self.assertEqual(entry['student_name'], 'Ada Lovelace')
         self.assertEqual(entry['kind'], 'subscription')
         self.assertEqual(entry['kind_display'], 'اشتراك')
+        self.assertEqual(entry['group_number'], group.group_number)
         self.assertEqual(Decimal(entry['amount']), Decimal('1000.00'))
 
         # The single-teacher summary (teacher card page) exposes the same totals.
@@ -339,7 +390,8 @@ class AdminActionsAPITests(APITestCase):
         )
         group.students.add(student)
 
-        url = reverse('AdminActions:student-renew-subscription', args=[student.id])
+        enrollment = group.enrollments.get(student=student)
+        url = reverse('AdminActions:enrollment-renew', args=[enrollment.id])
         self.client.post(url)
         self.client.post(url)
 
@@ -366,9 +418,11 @@ class AdminActionsAPITests(APITestCase):
         group.students.add(student)
 
         # Subscribing credits the teacher 1000 for this month.
-        self.client.post(
-            reverse('AdminActions:student-renew-subscription', args=[student.id])
+        enrollment = group.enrollments.get(student=student)
+        renew = self.client.post(
+            reverse('AdminActions:enrollment-renew', args=[enrollment.id])
         )
+        self.assertEqual(renew.status_code, status.HTTP_200_OK)
 
         # Removing the student claws back the fixed 1000 credit, not the
         # group's per-student revenue.
@@ -418,3 +472,183 @@ class AdminActionsAPITests(APITestCase):
             teacher=teacher, student=student, kind='adjustment'
         )
         self.assertEqual(adjustment.amount, Decimal('-1000.00'))
+
+    def test_enrollment_dates_are_independent_across_groups(self):
+        """Renewing one group's subscription never touches another group's dates."""
+        teacher = Teacher.objects.create(full_name='Alan Turing')
+        student = Student.objects.create(
+            first_name='Ada',
+            last_name='Lovelace',
+            birthdate='2008-12-10',
+            registration_date=timezone.localdate(),
+        )
+        math = Group.objects.create(
+            group_number=1,
+            subject='Mathematics',
+            level=Level.PRIMARY,
+            class_name=SchoolClass.FIRST_YEAR,
+            teacher=teacher,
+        )
+        science = Group.objects.create(
+            group_number=2,
+            subject='Science',
+            level=Level.PRIMARY,
+            class_name=SchoolClass.SECOND_YEAR,
+            teacher=teacher,
+        )
+        math.students.add(student)
+        science.students.add(student)
+
+        math_enrollment = math.enrollments.get(student=student)
+        science_enrollment = science.enrollments.get(student=student)
+        # Give the science enrollment an older, expired subscription.
+        expired = add_months(timezone.localdate(), -2)
+        science_enrollment.renewal_date = expired
+        science_enrollment.save(update_fields=['renewal_date'])
+
+        renew = self.client.post(
+            reverse('AdminActions:enrollment-renew', args=[math_enrollment.id])
+        )
+        self.assertEqual(renew.status_code, status.HTTP_200_OK)
+
+        math_enrollment.refresh_from_db()
+        science_enrollment.refresh_from_db()
+        self.assertEqual(math_enrollment.renewal_date, timezone.localdate())
+        self.assertTrue(math_enrollment.is_subscription_active)
+        # The other group's subscription is untouched: still expired.
+        self.assertEqual(science_enrollment.renewal_date, expired)
+        self.assertFalse(science_enrollment.is_subscription_active)
+
+        # The student stays subscribed (math is active), while the derived
+        # summary dates surface the soonest renewal — the lapsed science group.
+        student.refresh_from_db()
+        self.assertTrue(student.is_subscription_active)
+        self.assertEqual(student.renewal_subscription_date, expired)
+        self.assertEqual(student.subscription_expiry_date, add_months(expired, 1))
+
+    def test_adding_to_second_group_keeps_first_groups_dates(self):
+        """An enrollment created by the API starts its own subscription."""
+        teacher = Teacher.objects.create(full_name='Alan Turing')
+        student = Student.objects.create(
+            first_name='Ada',
+            last_name='Lovelace',
+            birthdate='2008-12-10',
+            registration_date=timezone.localdate(),
+        )
+        math = Group.objects.create(
+            group_number=1,
+            subject='Mathematics',
+            level=Level.PRIMARY,
+            class_name=SchoolClass.FIRST_YEAR,
+            teacher=teacher,
+        )
+        science = Group.objects.create(
+            group_number=2,
+            subject='Science',
+            level=Level.PRIMARY,
+            class_name=SchoolClass.SECOND_YEAR,
+            teacher=teacher,
+        )
+        math.students.add(student)
+        old_renewal = add_months(timezone.localdate(), -1)
+        math_enrollment = math.enrollments.get(student=student)
+        math_enrollment.renewal_date = old_renewal
+        math_enrollment.save(update_fields=['renewal_date'])
+
+        # Join the second group through the API.
+        response = self.client.patch(
+            reverse('AdminActions:group-detail', args=[science.id]),
+            {'students': [student.id]},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        math_enrollment.refresh_from_db()
+        self.assertEqual(math_enrollment.renewal_date, old_renewal)
+        science_enrollment = science.enrollments.get(student=student)
+        self.assertEqual(science_enrollment.renewal_date, timezone.localdate())
+        self.assertTrue(science_enrollment.is_subscription_active)
+
+    def test_student_subscription_is_derived_from_enrollments(self):
+        """Student-level `is_subscribed` is 'any active enrollment', not a flag."""
+        student = Student.objects.create(
+            first_name='Ada',
+            last_name='Lovelace',
+            birthdate='2008-12-10',
+            registration_date=timezone.localdate(),
+        )
+        # Outside any group there is nothing to subscribe *to*.
+        self.assertFalse(student.is_subscription_active)
+        response = self.client.get(
+            reverse('AdminActions:student-detail', args=[student.id])
+        )
+        self.assertFalse(response.data['is_subscribed'])
+
+        group = Group.objects.create(
+            group_number=1,
+            subject='Mathematics',
+            level=Level.PRIMARY,
+            class_name=SchoolClass.FIRST_YEAR,
+        )
+        group.students.add(student)
+        response = self.client.get(
+            reverse('AdminActions:student-detail', args=[student.id])
+        )
+        self.assertTrue(response.data['is_subscribed'])
+        self.assertEqual(len(response.data['enrollments']), 1)
+
+        # Deactivating the enrollment unsubscribes the student.
+        enrollment = group.enrollments.get(student=student)
+        enrollment.is_active = False
+        enrollment.save(update_fields=['is_active'])
+        response = self.client.get(
+            reverse('AdminActions:student-detail', args=[student.id])
+        )
+        self.assertFalse(response.data['is_subscribed'])
+        self.assertIsNone(response.data['renewal_subscription_date'])
+        self.assertIsNone(response.data['subscription_expiry_date'])
+
+    def test_teacher_earns_one_credit_per_group(self):
+        """A student in two groups of one teacher earns that teacher 2x1000."""
+        teacher = Teacher.objects.create(full_name='Alan Turing')
+        student = Student.objects.create(
+            first_name='Ada',
+            last_name='Lovelace',
+            birthdate='2008-12-10',
+            registration_date=timezone.localdate(),
+        )
+        math = Group.objects.create(
+            group_number=1,
+            subject='Mathematics',
+            level=Level.PRIMARY,
+            class_name=SchoolClass.FIRST_YEAR,
+            teacher=teacher,
+        )
+        science = Group.objects.create(
+            group_number=2,
+            subject='Science',
+            level=Level.PRIMARY,
+            class_name=SchoolClass.SECOND_YEAR,
+            teacher=teacher,
+        )
+
+        # Join both groups through the API — one enrollment each, one credit each.
+        for group in (math, science):
+            response = self.client.patch(
+                reverse('AdminActions:group-detail', args=[group.id]),
+                {'students': [student.id]},
+                format='json',
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        revenues = self.client.get(reverse('AdminActions:teacher-revenue-list'))
+        row = {r['full_name']: r for r in revenues.data}['Alan Turing']
+        self.assertEqual(row['students_count'], 1)
+        self.assertEqual(Decimal(row['current_month_revenue']), Decimal('2000.00'))
+
+        # The ledger shows which group each credit came from.
+        entries = self.client.get(
+            reverse('AdminActions:teacher-revenue-revenue-entries', args=[teacher.id])
+        )
+        self.assertEqual(len(entries.data), 2)
+        self.assertEqual({e['group_number'] for e in entries.data}, {1, 2})

@@ -6,7 +6,8 @@ import SubscriptionBadge from '../../../components/student/SubscriptionBadge'
 import { brand } from '../../landingpage/landingData'
 import { extractErrorMessage } from '../../../api/errors'
 import { addStudentToGroup, fetchGroup, updateGroup } from '../../../adminFetch/groups'
-import { fetchStudents } from '../../../adminFetch/students'
+import { fetchStudents, deleteStudent } from '../../../adminFetch/students'
+import { renewEnrollment } from '../../../adminFetch/enrollments'
 import '../admin.css'
 
 /** Today's date as an ISO `yyyy-mm-dd` string, for date inputs. */
@@ -52,6 +53,7 @@ export default function GroupViewPage() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [renewingId, setRenewingId] = useState(null)
 
   const [showStudentForm, setShowStudentForm] = useState(false)
   const [showAddChoice, setShowAddChoice] = useState(false)
@@ -73,6 +75,12 @@ export default function GroupViewPage() {
   const [responsiblePhone2, setResponsiblePhone2] = useState('')
   const [address, setAddress] = useState('')
   const [registrationDate, setRegistrationDate] = useState('')
+
+  // Delete ("إزالة") confirmation modal state — removes the student from the
+  // database entirely, not just from this group.
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -107,6 +115,14 @@ export default function GroupViewPage() {
     typeof entry === 'number' ? entry : entry.id,
   )
   const members = group?.students_detail ?? []
+  // Each member's subscription for *this* group — independent of any other
+  // group the student belongs to.
+  const enrollmentByStudent = new Map(
+    (group?.enrollments ?? []).map((enrollment) => [
+      enrollment.student,
+      enrollment,
+    ]),
+  )
   const availableStudents = allStudents.filter(
     (student) => !currentIds.includes(student.id),
   )
@@ -233,8 +249,63 @@ export default function GroupViewPage() {
     }
   }
 
+  /** Renew this group's subscription for one member — other groups untouched. */
+  async function handleRenew(enrollment) {
+    if (!enrollment || renewingId === enrollment.id) return
+    setRenewingId(enrollment.id)
+    setActionError('')
+    setStudentSuccess('')
+    try {
+      const result = await renewEnrollment(enrollment.id)
+      if (!result.ok) {
+        setActionError(extractErrorMessage(result.data))
+        return
+      }
+      const groupResult = await fetchGroup(id)
+      if (groupResult.ok) setGroup(groupResult.data)
+      setStudentSuccess(`تم تجديد اشتراك الطالب في المجموعة ${group?.group_number ?? ''}.`)
+    } finally {
+      setRenewingId(null)
+    }
+  }
+
   function removeStudent(student) {
-    changeStudents(currentIds.filter((entry) => entry !== student.id))
+    setDeleteError('')
+    setDeleteTarget(student)
+  }
+
+  function closeDelete() {
+    setDeleteError('')
+    setDeleteTarget(null)
+  }
+
+  /** Permanently delete the student from the database, then refresh. */
+  async function confirmDeleteStudent() {
+    const student = deleteTarget
+    if (!student) return
+
+    setDeleteError('')
+    setDeleting(true)
+    try {
+      const result = await deleteStudent(student.id)
+      // 404 means it was already deleted — treat it as success.
+      if (!result.ok && result.status !== 404) {
+        setDeleteError(extractErrorMessage(result.data))
+        return
+      }
+
+      setDeleteTarget(null)
+      setStudentSuccess(`تم حذف الطالب ${student.full_name} نهائيًا من قاعدة البيانات.`)
+
+      const [groupResult, studentsResult] = await Promise.all([
+        fetchGroup(id),
+        fetchStudents(),
+      ])
+      if (groupResult.ok) setGroup(groupResult.data)
+      if (studentsResult.ok) setAllStudents(studentsResult.data)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -329,42 +400,82 @@ export default function GroupViewPage() {
                 <p>لا يوجد طلاب في هذه المجموعة بعد.</p>
               ) : (
                 <div className="group-students">
-                  {members.map((student) => (
-                    <div className="group-student" key={student.id}>
-                      <Link
-                        className="group-student__link"
-                        to={`/admin/students/${student.id}`}
-                      >
-                        <h3 className="group-student__name">
-                          {student.full_name}
-                        </h3>
-                        <SubscriptionBadge isSubscribed={student.is_subscribed} />
-                        <p className="group-student__meta">
-                          {student.level_display}
-                          {student.class_name_display
-                            ? ` — ${student.class_name_display}`
-                            : ''}
-                        </p>
-                        <p className="group-student__meta">
-                          المدرسة: {student.school || '—'}
-                        </p>
-                        <p className="group-student__meta">
-                          تاريخ الميلاد: {student.birthdate || '—'}
-                        </p>
-                        <p className="group-student__meta">
-                          هاتف المسؤول: {student.responsible_phone1 || '—'}
-                        </p>
-                      </Link>
-                      <button
-                        className="lp-btn lp-btn--outline"
-                        type="button"
-                        disabled={saving}
-                        onClick={() => removeStudent(student)}
-                      >
-                        إزالة
-                      </button>
-                    </div>
-                  ))}
+                  {members.map((student) => {
+                    const enrollment = enrollmentByStudent.get(student.id)
+                    return (
+                      <div className="group-student" key={student.id}>
+                        <Link
+                          className="group-student__link"
+                          to={`/admin/students/${student.id}`}
+                        >
+                          <h3 className="group-student__name">
+                            {student.full_name}
+                          </h3>
+                          <SubscriptionBadge
+                            isSubscribed={Boolean(
+                              enrollment
+                                ? enrollment.is_subscription_active
+                                : student.is_subscribed,
+                            )}
+                          />
+                          <p className="group-student__meta">
+                            {student.level_display}
+                            {student.class_name_display
+                              ? ` — ${student.class_name_display}`
+                              : ''}
+                          </p>
+                          <p className="group-student__meta">
+                            المدرسة: {student.school || '—'}
+                          </p>
+                          <p className="group-student__meta">
+                            تاريخ الميلاد: {student.birthdate || '—'}
+                          </p>
+                          <p className="group-student__meta">
+                            هاتف المسؤول: {student.responsible_phone1 || '—'}
+                          </p>
+                        </Link>
+                        {enrollment && (
+                          <p className="group-student__meta">
+                            اشتراك هذه المجموعة: {enrollment.renewal_date || '—'}
+                            {' ← '}
+                            {enrollment.expiry_date || '—'}
+                          </p>
+                        )}
+                        <div className="group-student__actions">
+                          {enrollment && (
+                            <button
+                              className="lp-btn"
+                              type="button"
+                              disabled={
+                                saving ||
+                                deleting ||
+                                enrollment.is_subscription_active ||
+                                renewingId === enrollment.id
+                              }
+                              title={
+                                enrollment.is_subscription_active
+                                  ? 'الاشتراك مفعّل في هذه المجموعة'
+                                  : 'تجديد الاشتراك لهذه المجموعة فقط'
+                              }
+                              onClick={() => handleRenew(enrollment)}
+                            >
+                              {renewingId === enrollment.id
+                                ? 'جارٍ التجديد…'
+                                : 'تجديد الاشتراك'}
+                            </button>
+                          )}
+                          <button
+                            className="lp-btn lp-btn--outline"
+                            type="button"
+                            disabled={saving || deleting}
+                            onClick={() => removeStudent(student)}
+                          >
+                            إزالة
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </section>
@@ -714,6 +825,53 @@ export default function GroupViewPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {deleteTarget && (
+          <div
+            className="admin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-student-title"
+          >
+            <div className="admin-modal__card admin-modal__card--narrow">
+              <h2 className="admin-modal__title" id="delete-student-title">
+                إزالة الطالب
+              </h2>
+
+              <div className="admin-form">
+                <p className="admin-form__hint">
+                  سيتم حذف الطالب
+                  {` «${deleteTarget.full_name}»`} نهائيًا من قاعدة البيانات،
+                  مع خروجه من كل مجموعاته. هذا الإجراء لا يمكن التراجع عنه.
+                </p>
+
+                {deleteError && (
+                  <p className="admin-notice admin-notice--error" role="alert">
+                    {deleteError}
+                  </p>
+                )}
+
+                <div className="admin-form__actions">
+                  <button
+                    className="lp-btn lp-btn--outline"
+                    type="button"
+                    onClick={closeDelete}
+                  >
+                    إلغاء
+                  </button>
+                  <button
+                    className="lp-btn lp-btn--danger"
+                    type="button"
+                    disabled={deleting}
+                    onClick={confirmDeleteStudent}
+                  >
+                    {deleting ? 'جارٍ الحذف…' : 'حذف'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

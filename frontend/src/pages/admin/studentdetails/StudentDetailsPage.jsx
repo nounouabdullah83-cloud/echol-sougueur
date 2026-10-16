@@ -3,8 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { brand } from '../../landingpage/landingData'
 import { extractErrorMessage } from '../../../api/errors'
-import { fetchStudent, renewStudentSubscription } from '../../../adminFetch/students'
+import { fetchStudent } from '../../../adminFetch/students'
+import { renewEnrollment } from '../../../adminFetch/enrollments'
 import { fetchGroups } from '../../../adminFetch/groups'
+import SubscriptionBadge from '../../../components/student/SubscriptionBadge'
 import './studentdetails.css'
 
 /** Format a numeric amount with thousands separators. */
@@ -29,7 +31,7 @@ export default function StudentDetailsPage() {
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [renewing, setRenewing] = useState(false)
+  const [renewingId, setRenewingId] = useState(null)
   const [renewError, setRenewError] = useState('')
 
   useEffect(() => {
@@ -77,19 +79,31 @@ export default function StudentDetailsPage() {
     0,
   )
 
-  async function handleRenewSubscription() {
-    if (!student?.id || student.is_subscribed) return
-    setRenewing(true)
+  // The subscription lives per (student, group): map each group to its own
+  // enrollment so its dates/status/renew button stay independent.
+  const enrollmentByGroup = new Map(
+    (student?.enrollments ?? []).map((enrollment) => [
+      enrollment.group,
+      enrollment,
+    ]),
+  )
+
+  /** Renew one group's subscription — every other group keeps its dates. */
+  async function handleRenewEnrollment(enrollmentId) {
+    if (!enrollmentId || renewingId === enrollmentId) return
+    setRenewingId(enrollmentId)
     setRenewError('')
     try {
-      const result = await renewStudentSubscription(student.id)
-      if (result.ok) {
-        setStudent(result.data)
-      } else {
+      const result = await renewEnrollment(enrollmentId)
+      if (!result.ok) {
         setRenewError(extractErrorMessage(result.data))
+        return
       }
+      // Refetch so the derived student-level dates and status update too.
+      const refreshed = await fetchStudent(id)
+      if (refreshed.ok) setStudent(refreshed.data)
     } finally {
-      setRenewing(false)
+      setRenewingId(null)
     }
   }
 
@@ -189,13 +203,17 @@ export default function StudentDetailsPage() {
               </span>
             </div>
             <div className="student-paper__row">
-              <span className="student-paper__label">تاريخ تجديد الاشتراك</span>
+              <span className="student-paper__label">
+                تاريخ تجديد الاشتراك (الأقرب)
+              </span>
               <span className="student-paper__value">
                 {student.renewal_subscription_date || '—'}
               </span>
             </div>
             <div className="student-paper__row">
-              <span className="student-paper__label">تاريخ انتهاء الاشتراك</span>
+              <span className="student-paper__label">
+                تاريخ انتهاء الاشتراك (الأقرب)
+              </span>
               <span className="student-paper__value">
                 {student.subscription_expiry_date || '—'}
               </span>
@@ -236,30 +254,66 @@ export default function StudentDetailsPage() {
                       <th>القسم</th>
                       <th>المعلم</th>
                       <th>التكلفة</th>
+                      <th>تجديد الاشتراك</th>
+                      <th>انتهاء الاشتراك</th>
+                      <th>الحالة</th>
+                      <th aria-label="إجراء" />
                     </tr>
                   </thead>
                   <tbody>
-                    {groups.map((group) => (
-                      <tr key={group.id}>
-                        <td>
-                          <Link
-                            className="student-paper__link"
-                            to={`/admin/groups/${group.id}`}
-                          >
-                            group {group.group_number}
-                          </Link>
-                        </td>
-                        <td>{group.subject || '—'}</td>
-                        <td>{group.level_display || '—'}</td>
-                        <td>{group.class_name_display || '—'}</td>
-                        <td>{group.teacher_name || '—'}</td>
-                        <td>{formatCost(group.revenue_per_student)}</td>
-                      </tr>
-                    ))}
+                    {groups.map((group) => {
+                      const enrollment = enrollmentByGroup.get(group.id)
+                      return (
+                        <tr key={group.id}>
+                          <td>
+                            <Link
+                              className="student-paper__link"
+                              to={`/admin/groups/${group.id}`}
+                            >
+                              group {group.group_number}
+                            </Link>
+                          </td>
+                          <td>{group.subject || '—'}</td>
+                          <td>{group.level_display || '—'}</td>
+                          <td>{group.class_name_display || '—'}</td>
+                          <td>{group.teacher_name || '—'}</td>
+                          <td>{formatCost(group.revenue_per_student)}</td>
+                          <td>{enrollment?.renewal_date || '—'}</td>
+                          <td>{enrollment?.expiry_date || '—'}</td>
+                          <td>
+                            <SubscriptionBadge
+                              isSubscribed={Boolean(enrollment?.is_subscription_active)}
+                            />
+                          </td>
+                          <td>
+                            {enrollment && (
+                              <button
+                                className="student-paper__renew"
+                                type="button"
+                                disabled={
+                                  enrollment.is_subscription_active ||
+                                  renewingId === enrollment.id
+                                }
+                                onClick={() => handleRenewEnrollment(enrollment.id)}
+                                title={
+                                  enrollment.is_subscription_active
+                                    ? 'الاشتراك مفعّل في هذه المجموعة'
+                                    : 'تجديد الاشتراك لهذه المجموعة فقط'
+                                }
+                              >
+                                {renewingId === enrollment.id
+                                  ? 'جارٍ التجديد…'
+                                  : 'تجديد'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                   <tfoot>
                     <tr>
-                      <td colSpan={5}>المجموع الكلي</td>
+                      <td colSpan={9}>المجموع الكلي</td>
                       <td>{formatCost(totalCost)}</td>
                     </tr>
                   </tfoot>
@@ -278,18 +332,12 @@ export default function StudentDetailsPage() {
             رجوع
           </button>
           {student && !loading && (
-            <button
-              type="button"
-              className={`student-paper__subscribe ${
-                student.is_subscribed
-                  ? 'student-paper__subscribe--on'
-                  : 'student-paper__subscribe--off'
-              }`}
-              disabled={student.is_subscribed || renewing}
-              onClick={handleRenewSubscription}
-            >
-              {student.is_subscribed ? 'subscribed' : 'unsubscribed'}
-            </button>
+            <div className="student-paper__subscribe">
+              <SubscriptionBadge isSubscribed={student.is_subscribed} />
+              <span className="student-paper__hint">
+                التجديد منفصل لكل مجموعة من جدول المجموعات.
+              </span>
+            </div>
           )}
         </div>
       </article>

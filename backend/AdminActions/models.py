@@ -90,21 +90,6 @@ class Student(models.Model):
     registration_date = models.DateField(
         help_text='Set manually by the admin when the student is added.'
     )
-    is_subscribed = models.BooleanField(
-        default=True,
-        help_text='True while the student has an active subscription.',
-    )
-    renewal_subscription_date = models.DateField(
-        null=True,
-        blank=True,
-        help_text=(
-            'Date the subscription was last renewed. Defaults to the '
-            'registration date when the student is first added.'
-        ),
-    )
-
-    #: How long a subscription stays active after its renewal date.
-    SUBSCRIPTION_DURATION_MONTHS = 1
 
     class Meta:
         ordering = ('last_name', 'first_name')
@@ -114,38 +99,40 @@ class Student(models.Model):
     def __str__(self):
         return self.full_name
 
-    def save(self, *args, **kwargs):
-        # The subscription starts on the registration date by default.
-        if not self.renewal_subscription_date:
-            self.renewal_subscription_date = self.registration_date
-        super().save(*args, **kwargs)
-
     @property
     def full_name(self):
         return f'{self.first_name} {self.last_name}'.strip()
 
     @property
+    def active_enrollments(self):
+        """Enrollments whose stored subscription flag is on (expiry ignored).
+
+        A plain list over `self.enrollments.all()` so `prefetch_related`
+        caching is honoured instead of issuing a query per student.
+        """
+        return [enrollment for enrollment in self.enrollments.all() if enrollment.is_active]
+
+    @property
+    def renewal_subscription_date(self):
+        """Soonest renewal date across active enrollments, or None."""
+        dates = [enrollment.renewal_date for enrollment in self.active_enrollments]
+        return min(dates) if dates else None
+
+    @property
     def subscription_expiry_date(self):
-        """The date the current subscription expires, or None if unknown."""
-        if not self.renewal_subscription_date:
+        """Expiry of the soonest-renewing active enrollment, or None."""
+        renewal = self.renewal_subscription_date
+        if renewal is None:
             return None
-        return add_months(
-            self.renewal_subscription_date, self.SUBSCRIPTION_DURATION_MONTHS
-        )
+        return add_months(renewal, Enrollment.SUBSCRIPTION_DURATION_MONTHS)
 
     @property
     def is_subscription_active(self):
-        """Whether the subscription is currently active (not expired)."""
-        expiry = self.subscription_expiry_date
-        if not self.is_subscribed or expiry is None:
-            return False
-        return timezone.localdate() <= expiry
-
-    def renew_subscription(self, renewal_date=None):
-        """Reactivate the subscription and reset its renewal date."""
-        self.is_subscribed = True
-        self.renewal_subscription_date = renewal_date or timezone.localdate()
-        self.save(update_fields=['is_subscribed', 'renewal_subscription_date'])
+        """True while *any* enrollment has an active, unexpired subscription."""
+        return any(
+            enrollment.is_subscription_active
+            for enrollment in self.active_enrollments
+        )
 
 
 class Teacher(models.Model):
@@ -175,13 +162,15 @@ class TeacherRevenueKind(models.TextChoices):
 class TeacherRevenueEntry(models.Model):
     """One movement of revenue for a teacher for a single student in a month.
 
-    A `subscription` entry is recorded when a subscribed student starts a
-    subscription with, or renews it for, a teacher. Only one such entry is
-    created per teacher/student/month, so re-adding or re-renewing the same
-    student in the same month never double-counts. An `adjustment` entry
-    (typically negative) reverses part of that revenue, e.g. when the student
-    is removed from one of the teacher's groups. Because entries are keyed by
-    month, each new month starts at zero.
+    A `subscription` entry is recorded when a student's enrollment starts or
+    renews its subscription with a teacher. Only one such entry is created per
+    enrollment/month, so re-adding or re-renewing the same enrollment in the
+    same month never double-counts — while a student enrolled in two of the
+    teacher's groups earns the teacher one credit per group. An `adjustment`
+    entry (typically negative) reverses part of that revenue, e.g. when the
+    student is removed from one of the teacher's groups; by then the enrollment
+    row is gone, so it is left untagged. Because entries are keyed by month,
+    each new month starts at zero.
     """
 
     teacher = models.ForeignKey(
@@ -193,6 +182,14 @@ class TeacherRevenueEntry(models.Model):
         Student,
         on_delete=models.CASCADE,
         related_name='revenue_entries',
+    )
+    enrollment = models.ForeignKey(
+        'Enrollment',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='revenue_entries',
+        help_text='The enrollment this credit belongs to, when known.',
     )
     month = models.DateField(
         help_text='First day of the month this entry belongs to.',
@@ -218,37 +215,31 @@ class TeacherRevenueEntry(models.Model):
         return f'{self.teacher} · {self.student} · {self.month:%Y-%m}'
 
 
-def accrue_subscription_revenue(student, when=None):
-    """Credit every teacher of `student` with this month's revenue.
+def accrue_enrollment_revenue(enrollment, when=None):
+    """Credit the enrollment's group teacher with this month's revenue.
 
-    A teacher is credited at most once per student per month, so calling this
-    again in the same month is a no-op. Returns nothing.
+    Revenue accrues **per enrollment**: a student enrolled in two of the same
+    teacher's groups earns that teacher two credits. Idempotent per
+    enrollment/month, so calling this again in the same month is a no-op.
+    Does nothing when the group has no teacher. Returns nothing.
     """
-    month = (when or timezone.localdate()).replace(day=1)
-    teacher_ids = set(
-        Teacher.objects.filter(groups__students=student)
-        .values_list('id', flat=True)
-        .distinct()
-    )
-    already_credited = set(
-        TeacherRevenueEntry.objects.filter(
-            student=student,
-            month=month,
-            kind=TeacherRevenueKind.SUBSCRIPTION,
-            teacher_id__in=teacher_ids,
-        ).values_list('teacher_id', flat=True)
-    )
-    TeacherRevenueEntry.objects.bulk_create(
-        [
-            TeacherRevenueEntry(
-                teacher_id=teacher_id,
-                student=student,
-                month=month,
-                kind=TeacherRevenueKind.SUBSCRIPTION,
-                amount=Teacher.REVENUE_PER_STUDENT,
-            )
-            for teacher_id in teacher_ids - already_credited
-        ]
+    if enrollment.group.teacher_id is None:
+        return
+    month = (when or enrollment.renewal_date).replace(day=1)
+    already_credited = TeacherRevenueEntry.objects.filter(
+        enrollment=enrollment,
+        month=month,
+        kind=TeacherRevenueKind.SUBSCRIPTION,
+    ).exists()
+    if already_credited:
+        return
+    TeacherRevenueEntry.objects.create(
+        teacher_id=enrollment.group.teacher_id,
+        student=enrollment.student,
+        enrollment=enrollment,
+        month=month,
+        kind=TeacherRevenueKind.SUBSCRIPTION,
+        amount=Teacher.REVENUE_PER_STUDENT,
     )
 
 
@@ -258,7 +249,9 @@ def deduct_group_revenue(student, group, when=None):
     Called when `student` is removed from `group`. The teacher's fixed
     per-student revenue credit (`Teacher.REVENUE_PER_STUDENT`, i.e. 1000) is
     deducted for the current month, reversing the credit granted when the
-    student subscribed. Does nothing when the group has no teacher. Returns
+    student joined the group. The enrollment row is already gone at this
+    point, so the adjustment is left untagged (it still carries the teacher,
+    student and month). Does nothing when the group has no teacher. Returns
     nothing.
     """
     if group.teacher_id is None:
@@ -301,7 +294,12 @@ class Group(models.Model):
         blank=True,
         help_text='The school year within the chosen level.',
     )
-    students = models.ManyToManyField(Student, related_name='groups', blank=True)
+    students = models.ManyToManyField(
+        Student,
+        through='Enrollment',
+        related_name='groups',
+        blank=True,
+    )
     teacher = models.ForeignKey(
         Teacher,
         on_delete=models.SET_NULL,
@@ -351,3 +349,81 @@ class Group(models.Model):
                 raise ValidationError(
                     {'class_name': 'هذا القسم غير متاح للمستوى المختار.'}
                 )
+
+
+class Enrollment(models.Model):
+    """One student's membership of one group, with its own subscription.
+
+    The subscription lives *here*, not on the student: each (student, group)
+    pair has an independent `renewal_date`, so joining or renewing one group
+    never touches the dates of another group the student is in. Membership of
+    a group is the existence of this row; `is_active` is the stored
+    subscription flag for that membership (the effective state also depends on
+    `renewal_date` having not expired).
+    """
+
+    #: How long a subscription stays active after its renewal date.
+    SUBSCRIPTION_DURATION_MONTHS = 1
+
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name='enrollments',
+    )
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name='enrollments',
+    )
+    joined_on = models.DateField(
+        default=timezone.localdate,
+        help_text='Date the student joined this group.',
+    )
+    renewal_date = models.DateField(
+        default=timezone.localdate,
+        help_text=(
+            'Start of this enrollment\'s current subscription period. '
+            'Defaults to the day the student joined the group.'
+        ),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text='Stored subscription flag for this enrollment.',
+    )
+
+    class Meta:
+        ordering = ('joined_on', 'id')
+        constraints = [
+            models.UniqueConstraint(
+                fields=('group', 'student'),
+                name='unique_enrollment_per_group_student',
+            )
+        ]
+        verbose_name = 'enrollment'
+        verbose_name_plural = 'enrollments'
+
+    def __str__(self):
+        return f'{self.student} · Group {self.group_id}'
+
+    @property
+    def expiry_date(self):
+        """The date this enrollment's subscription expires."""
+        return add_months(self.renewal_date, self.SUBSCRIPTION_DURATION_MONTHS)
+
+    @property
+    def is_subscription_active(self):
+        """Whether this enrollment's subscription is on and not expired."""
+        if not self.is_active:
+            return False
+        return timezone.localdate() <= self.expiry_date
+
+    def renew(self, renewal_date=None):
+        """Restart this enrollment's subscription period and credit revenue.
+
+        Only this enrollment is touched — every other group the student
+        belongs to keeps its own dates.
+        """
+        self.renewal_date = renewal_date or timezone.localdate()
+        self.is_active = True
+        self.save(update_fields=['renewal_date', 'is_active'])
+        accrue_enrollment_revenue(self)
